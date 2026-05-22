@@ -455,7 +455,7 @@ namespace reshade
 
 		#pragma region Overlay Home
 		char _effect_filter[32] = {};
-		bool _variable_editor_tabs = false;
+		bool _variable_editor_tabs = true;
 		bool _auto_save_preset = true;
 		bool _preset_is_modified = false;
 		bool _inherit_current_preset = false;
