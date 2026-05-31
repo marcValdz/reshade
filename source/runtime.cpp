@@ -297,8 +297,8 @@ reshade::runtime::runtime(api::swapchain *swapchain, api::command_queue *graphic
 	_start_time(std::chrono::high_resolution_clock::now()),
 	_last_present_time(_start_time),
 	_last_frame_duration(std::chrono::milliseconds(1)),
-	_effect_search_paths({ L".\\" }),
-	_texture_search_paths({ L".\\" }),
+	_effect_search_paths({ L".\\**" }),
+	_texture_search_paths({ L".\\**" }),
 	_config_path(config_path),
 	_screenshot_path(L".\\"),
 	_screenshot_name("%AppName% %Date% %Time%_%Count%"), // Ensure unique naming with screenshot count because users may request more than one screenshot per second
