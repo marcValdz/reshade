@@ -269,7 +269,9 @@ namespace reshade
 
 		bool _effects_enabled = true;
 		bool _effects_rendered_this_frame = false;
-		unsigned int _effects_key_data[4] = {};
+		// The first value is the key code, the next three values are the modifier keys (ctrl, shift, alt)
+		// I prefer Shift+Home to toggle effects
+		unsigned int _effects_key_data[4] = { 0x24, 0, 1, 0 };
 
 		std::chrono::system_clock::time_point _current_time;
 		uint64_t _frame_count = 0;
