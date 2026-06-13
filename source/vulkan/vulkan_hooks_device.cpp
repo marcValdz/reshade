@@ -248,6 +248,8 @@ VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevi
 
 		if (instance.api_version < VK_API_VERSION_1_4)
 		{
+			add_extension(VK_KHR_MAINTENANCE_5_EXTENSION_NAME, true);
+
 #if VK_KHR_push_descriptor
 			push_descriptor_ext = add_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME, false);
 #endif
@@ -537,6 +539,20 @@ VkResult VKAPI_CALL vkCreateDevice(VkPhysicalDevice physicalDevice, const VkDevi
 		create_info.pNext = &acceleration_structure_features;
 	}
 #endif
+
+	VkPhysicalDeviceMaintenance5Features maintenance5_features;
+	if (const auto existing_maintenance5_features = find_in_structure_chain<VkPhysicalDeviceMaintenance5Features>(
+			pCreateInfo->pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES))
+	{
+		const_cast<VkPhysicalDeviceMaintenance5Features *>(existing_maintenance5_features)->maintenance5 = VK_TRUE;
+	}
+	else
+	{
+		maintenance5_features = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES, const_cast<void *>(create_info.pNext) };
+		maintenance5_features.maintenance5 = true;
+
+		create_info.pNext = &maintenance5_features;
+	}
 	#pragma endregion
 
 	// Continue calling down the chain
