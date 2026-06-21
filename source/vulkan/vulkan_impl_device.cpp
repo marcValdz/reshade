@@ -2658,6 +2658,8 @@ void reshade::vulkan::device_impl::update_descriptor_tables(uint32_t count, cons
 			break;
 		case api::descriptor_type::constant_buffer:
 		case api::descriptor_type::shader_storage_buffer:
+		case api::descriptor_type::constant_buffer_with_dynamic_offset:
+		case api::descriptor_type::shader_storage_buffer_with_dynamic_offset:
 			write.pBufferInfo = static_cast<const VkDescriptorBufferInfo *>(update.descriptors);
 			break;
 #if VK_KHR_acceleration_structure
@@ -2672,10 +2674,7 @@ void reshade::vulkan::device_impl::update_descriptor_tables(uint32_t count, cons
 			break;
 #endif
 		default:
-			if (write.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC || write.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
-				write.pBufferInfo = static_cast<const VkDescriptorBufferInfo *>(update.descriptors);
-			else
-				assert(false);
+			assert(false);
 			break;
 		}
 	}

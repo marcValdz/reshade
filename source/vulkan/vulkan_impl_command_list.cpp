@@ -614,7 +614,7 @@ void reshade::vulkan::command_list_impl::push_descriptors(api::shader_stage stag
 #endif
 	}
 }
-void reshade::vulkan::command_list_impl::bind_descriptor_tables(api::shader_stage stages, api::pipeline_layout layout, uint32_t first, uint32_t count, const api::descriptor_table *tables)
+void reshade::vulkan::command_list_impl::bind_descriptor_tables2(api::shader_stage stages, api::pipeline_layout layout, uint32_t first, uint32_t count, const api::descriptor_table *tables, uint32_t dynamic_offset_count, const uint32_t *dynamic_offsets)
 {
 	if ((stages & api::shader_stage::all_compute) != 0)
 	{
@@ -622,7 +622,7 @@ void reshade::vulkan::command_list_impl::bind_descriptor_tables(api::shader_stag
 			_orig,
 			VK_PIPELINE_BIND_POINT_COMPUTE,
 			(VkPipelineLayout)layout.handle,
-			first, count, reinterpret_cast<const VkDescriptorSet *>(tables), 0, nullptr);
+			first, count, reinterpret_cast<const VkDescriptorSet *>(tables), dynamic_offset_count, dynamic_offsets);
 	}
 	if ((stages & api::shader_stage::all_graphics) != 0)
 	{
@@ -630,7 +630,7 @@ void reshade::vulkan::command_list_impl::bind_descriptor_tables(api::shader_stag
 			_orig,
 			VK_PIPELINE_BIND_POINT_GRAPHICS,
 			(VkPipelineLayout)layout.handle,
-			first, count, reinterpret_cast<const VkDescriptorSet *>(tables), 0, nullptr);
+			first, count, reinterpret_cast<const VkDescriptorSet *>(tables), dynamic_offset_count, dynamic_offsets);
 	}
 	if ((stages & api::shader_stage::all_ray_tracing) != 0)
 	{
@@ -639,7 +639,7 @@ void reshade::vulkan::command_list_impl::bind_descriptor_tables(api::shader_stag
 			_orig,
 			VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
 			(VkPipelineLayout)layout.handle,
-			first, count, reinterpret_cast<const VkDescriptorSet *>(tables), 0, nullptr);
+			first, count, reinterpret_cast<const VkDescriptorSet *>(tables), dynamic_offset_count, dynamic_offsets);
 #else
 		assert(false);
 #endif

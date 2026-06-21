@@ -592,7 +592,7 @@ void reshade::d3d11::device_context_impl::push_descriptors(api::shader_stage sta
 		break;
 	}
 }
-void reshade::d3d11::device_context_impl::bind_descriptor_tables(api::shader_stage stages, api::pipeline_layout layout, uint32_t first, uint32_t count, const api::descriptor_table *tables)
+void reshade::d3d11::device_context_impl::bind_descriptor_tables2(api::shader_stage stages, api::pipeline_layout layout, uint32_t first, uint32_t count, const api::descriptor_table *tables, uint32_t, const uint32_t *)
 {
 	for (uint32_t i = 0; i < count; ++i)
 	{

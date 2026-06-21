@@ -1200,7 +1200,7 @@ void reshade::opengl::device_context_impl::push_descriptors(api::shader_stage, a
 		break;
 	}
 }
-void reshade::opengl::device_context_impl::bind_descriptor_tables(api::shader_stage stages, api::pipeline_layout layout, uint32_t first, uint32_t count, const api::descriptor_table *tables)
+void reshade::opengl::device_context_impl::bind_descriptor_tables2(api::shader_stage stages, api::pipeline_layout layout, uint32_t first, uint32_t count, const api::descriptor_table *tables, uint32_t, const uint32_t *)
 {
 	for (uint32_t i = 0; i < count; ++i)
 	{

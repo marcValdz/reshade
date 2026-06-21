@@ -462,7 +462,8 @@ void VKAPI_CALL vkCmdBindDescriptorSets(VkCommandBuffer commandBuffer, VkPipelin
 		reshade::vulkan::convert_shader_stages(pipelineBindPoint),
 		reshade::api::pipeline_layout { (uint64_t)layout },
 		firstSet, descriptorSetCount,
-		reinterpret_cast<const reshade::api::descriptor_table *>(pDescriptorSets));
+		reinterpret_cast<const reshade::api::descriptor_table *>(pDescriptorSets),
+		dynamicOffsetCount, pDynamicOffsets);
 #endif
 }
 

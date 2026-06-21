@@ -111,10 +111,12 @@ namespace reshade::api
 		/// Descriptors are an array of <see cref="buffer_range"/>.
 		/// </summary>
 		constant_buffer = 6,
+		constant_buffer_with_dynamic_offset = 8,
 		/// <summary>
 		/// Descriptors are an array of <see cref="buffer_range"/>.
 		/// </summary>
 		shader_storage_buffer = 7,
+		shader_storage_buffer_with_dynamic_offset = 9,
 		/// <summary>
 		/// Descriptors are an array of <see cref="resource_view"/>.
 		/// </summary>

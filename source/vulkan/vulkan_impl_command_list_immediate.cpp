@@ -180,13 +180,12 @@ void reshade::vulkan::command_list_immediate_impl::push_descriptors(api::shader_
 		break;
 	case api::descriptor_type::constant_buffer:
 	case api::descriptor_type::shader_storage_buffer:
+	case api::descriptor_type::constant_buffer_with_dynamic_offset:
+	case api::descriptor_type::shader_storage_buffer_with_dynamic_offset:
 		write.pBufferInfo = reinterpret_cast<const VkDescriptorBufferInfo *>(update.descriptors);
 		break;
 	default:
-		if (write.descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC || write.descriptorType == VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC)
-			write.pBufferInfo = reinterpret_cast<const VkDescriptorBufferInfo *>(update.descriptors);
-		else
-			assert(false);
+		assert(false);
 		break;
 	}
 

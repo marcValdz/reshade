@@ -803,7 +803,7 @@ namespace reshade::api
 		/// <param name="first">Index of the first pipeline <paramref name="layout"/> parameter that describes the first descriptor table to bind (root parameter index in D3D12, descriptor set index in Vulkan).</param>
 		/// <param name="count">Number of descriptor tables to bind.</param>
 		/// <param name="tables">Pointer to the first element of an array of descriptor tables to bind.</param>
-		virtual void bind_descriptor_tables(shader_stage stages, pipeline_layout layout, uint32_t first, uint32_t count, const descriptor_table *tables) = 0;
+		virtual void bind_descriptor_tables(shader_stage stages, pipeline_layout layout, uint32_t first, uint32_t count, const descriptor_table *tables) { bind_descriptor_tables2(stages, layout, first, count, tables, 0, nullptr); }
 
 		/// <summary>
 		/// Binds an index buffer to the input-assembler stage.
@@ -1177,6 +1177,18 @@ namespace reshade::api
 		/// <param name="ds">Optional pointer to a depth-stencil description, or <see langword="nullptr"/> to bind none.</param>
 		/// <param name="flags">Additional parameters of the render pass.</param>
 		virtual void begin_render_pass2(uint32_t count, const render_pass_render_target_desc *rts, const render_pass_depth_stencil_desc *ds, render_pass_flags flags) = 0;
+
+		/// <summary>
+		/// Binds an array of descriptor tables.
+		/// </summary>
+		/// <param name="stages">Shader stages that will use the descriptors.</param>
+		/// <param name="layout">Pipeline layout that describes the descriptors.</param>
+		/// <param name="first">Index of the first pipeline <paramref name="layout"/> parameter that describes the first descriptor table to bind (root parameter index in D3D12, descriptor set index in Vulkan).</param>
+		/// <param name="count">Number of descriptor tables to bind.</param>
+		/// <param name="tables">Pointer to the first element of an array of descriptor tables to bind.</param>
+		/// <param name="dynamic_offset_count">Number of dynamic offsets.</param>
+		/// <param name="dynamic_offsets">Pointer to the first element of an array of dynamic offsets for any descriptors of type <see cref="descriptor_type::constant_buffer_with_dynamic_offset"/> or <see cref="descriptor_type::shader_storage_buffer_with_dynamic_offset"/>.</param>
+		virtual void bind_descriptor_tables2(shader_stage stages, pipeline_layout layout, uint32_t first, uint32_t count, const descriptor_table *tables, uint32_t dynamic_offset_count, const uint32_t *dynamic_offsets) = 0;
 	};
 
 	/// <summary>
