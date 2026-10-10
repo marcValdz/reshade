@@ -44,13 +44,14 @@ if !errorlevel! neq 0 (
 
 echo.
 echo [4/4] Building ReShade ^(32-bit, 64-bit, Setup^)...
-"!MSBUILD!" ReShade.sln /p:Configuration=Release /p:Platform=32-bit
+set "MSBUILD_ARGS=/m /nologo /v:minimal"
+"!MSBUILD!" ReShade.sln !MSBUILD_ARGS! /p:Configuration=Release /p:Platform=32-bit
 if !errorlevel! neq 0 goto :fail
 
-"!MSBUILD!" ReShade.sln /p:Configuration=Release /p:Platform=64-bit
+"!MSBUILD!" ReShade.sln !MSBUILD_ARGS! /p:Configuration=Release /p:Platform=64-bit
 if !errorlevel! neq 0 goto :fail
 
-"!MSBUILD!" ReShade.sln /p:Configuration="Release Setup"
+"!MSBUILD!" ReShade.sln !MSBUILD_ARGS! /p:Configuration="Release Setup"
 if !errorlevel! neq 0 goto :fail
 
 echo.
