@@ -7,6 +7,7 @@
 
 #include "reshade.hpp"
 #include "addon_manager.hpp"
+#include "hook_manager.hpp"
 #include "dll_log.hpp"
 #include "ini_file.hpp"
 #include <algorithm> // std::find, std::find_if, std::remove, std::remove_if
@@ -141,6 +142,44 @@ std::vector<reshade::addon_info> reshade::addon_loaded_info;
 thread_local const reshade::addon_info *reshade::addon_current = nullptr;
 static unsigned long s_reference_count = 0;
 
+#if RESHADE_ADDON >= 2
+// Add-ons find the ReShade module in 'DllMain' through 'EnumProcessModules', which fails in some processes (e.g. Phantom Blade Zero), so list the images mapped in the address space there instead
+static BOOL WINAPI HookK32EnumProcessModules(HANDLE hProcess, HMODULE *lphModule, DWORD cb, LPDWORD lpcbNeeded)
+{
+	static const auto trampoline = reshade::hooks::call(&HookK32EnumProcessModules);
+
+	if (trampoline(hProcess, lphModule, cb, lpcbNeeded))
+		return TRUE;
+
+	const DWORD error_code = GetLastError();
+	if (GetProcessId(hProcess) != GetCurrentProcessId())
+	{
+		SetLastError(error_code);
+		return FALSE;
+	}
+
+	DWORD count = 0;
+	MEMORY_BASIC_INFORMATION info = {};
+	for (const BYTE *address = nullptr; VirtualQuery(address, &info, sizeof(info)) == sizeof(info); address = static_cast<const BYTE *>(info.BaseAddress) + info.RegionSize)
+	{
+		// An image's first region starts its allocation, and 'GetModuleFileName' leaves out images mapped as data
+		WCHAR path[MAX_PATH];
+		if (info.Type != MEM_IMAGE || info.AllocationBase != info.BaseAddress || GetModuleFileNameW(static_cast<HMODULE>(info.AllocationBase), path, ARRAYSIZE(path)) == 0)
+			continue;
+
+		if (lphModule != nullptr && (count + 1) * sizeof(HMODULE) <= cb)
+			lphModule[count] = static_cast<HMODULE>(info.AllocationBase);
+		count++;
+	}
+
+	if (lpcbNeeded != nullptr)
+		*lpcbNeeded = count * sizeof(HMODULE);
+
+	SetLastError(ERROR_SUCCESS);
+	return TRUE;
+}
+#endif
+
 void reshade::load_addons()
 {
 	// Only load add-ons the first time a reference is added
@@ -222,6 +261,10 @@ void reshade::load_addons()
 		", *.addon64"
 #endif
 		") in '%s' ...", addon_search_path.u8string().c_str());
+
+#if RESHADE_ADDON >= 2
+	hooks::install("K32EnumProcessModules", reinterpret_cast<hook::address>(GetProcAddress(GetModuleHandleW(L"kernelbase.dll"), "K32EnumProcessModules")), reinterpret_cast<hook::address>(&HookK32EnumProcessModules));
+#endif
 
 	std::error_code ec;
 	for (std::filesystem::path path : std::filesystem::directory_iterator(addon_search_path, std::filesystem::directory_options::skip_permission_denied, ec))
