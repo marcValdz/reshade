@@ -382,6 +382,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID)
 #endif
 
 			reshade::hooks::uninstall();
+#if RESHADE_ADDON >= 2
+			reshade::uninstall_module_list();
+#endif
 
 			// Module is now invalid, so break out of any message loops that may still have it in the call stack (see 'HookGetMessage' implementation in input_windows.cpp)
 			// This is necessary since a different thread may have called into the 'GetMessage' hook from ReShade, but may not receive a message until after the ReShade module was unloaded

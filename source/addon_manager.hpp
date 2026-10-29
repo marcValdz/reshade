@@ -51,6 +51,11 @@ namespace reshade
 	bool has_loaded_addons();
 
 	/// <summary>
+	/// Stops keeping the module list that stands in for a failing 'EnumProcessModules' current, before the ReShade module unloads.
+	/// </summary>
+	void uninstall_module_list();
+
+	/// <summary>
 	/// Gets the add-on that was loaded at the specified address.
 	/// </summary>
 	addon_info *find_addon(const void *address);

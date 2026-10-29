@@ -10,7 +10,9 @@
 #include "hook_manager.hpp"
 #include "dll_log.hpp"
 #include "ini_file.hpp"
-#include <algorithm> // std::find, std::find_if, std::remove, std::remove_if
+#include <algorithm> // std::copy_n, std::find, std::find_if, std::min, std::remove, std::remove_if
+#include <atomic>
+#include <shared_mutex>
 #include <Windows.h>
 
 extern void register_addon_depth();
@@ -143,40 +145,143 @@ thread_local const reshade::addon_info *reshade::addon_current = nullptr;
 static unsigned long s_reference_count = 0;
 
 #if RESHADE_ADDON >= 2
-// Add-ons find the ReShade module in 'DllMain' through 'EnumProcessModules', which fails in some processes (e.g. Phantom Blade Zero), so list the images mapped in the address space there instead
-static BOOL WINAPI HookK32EnumProcessModules(HANDLE hProcess, HMODULE *lphModule, DWORD cb, LPDWORD lpcbNeeded)
+struct module_notification_data
 {
-	static const auto trampoline = reshade::hooks::call(&HookK32EnumProcessModules);
+	ULONG Flags;
+	const void *FullDllName;
+	const void *BaseDllName;
+	PVOID DllBase;
+	ULONG SizeOfImage;
+};
 
-	if (trampoline(hProcess, lphModule, cb, lpcbNeeded))
-		return TRUE;
+// The address space walk takes tens of milliseconds in a large application, so it runs once and the loader's notifications keep its list current
+static std::atomic<bool> s_module_list_unreadable = false;
+static std::atomic<bool> s_mapped_images_registered = false;
+static std::shared_mutex s_mapped_images_mutex;
+static std::vector<HMODULE> s_mapped_images;
+static bool s_mapped_images_walked = false;
+static PVOID s_mapped_images_cookie = nullptr;
+// Loads and unloads since the list was last read; the callback runs under the loader lock, so it only takes this lock, which is never held across a loader call
+static std::shared_mutex s_mapped_image_changes_mutex;
+static std::vector<std::pair<HMODULE, bool>> s_mapped_image_changes;
 
-	const DWORD error_code = GetLastError();
-	if (GetProcessId(hProcess) != GetCurrentProcessId())
-	{
-		SetLastError(error_code);
-		return FALSE;
-	}
+static VOID CALLBACK MappedImageNotificationCallback(ULONG NotificationReason, const module_notification_data *NotificationData, PVOID)
+{
+	const std::unique_lock<std::shared_mutex> lock(s_mapped_image_changes_mutex);
+	s_mapped_image_changes.emplace_back(static_cast<HMODULE>(NotificationData->DllBase), NotificationReason == 1 /* LDR_DLL_NOTIFICATION_REASON_LOADED */);
+}
 
-	DWORD count = 0;
+static std::vector<HMODULE> walk_mapped_images()
+{
+	std::vector<HMODULE> images;
 	MEMORY_BASIC_INFORMATION info = {};
 	for (const BYTE *address = nullptr; VirtualQuery(address, &info, sizeof(info)) == sizeof(info); address = static_cast<const BYTE *>(info.BaseAddress) + info.RegionSize)
 	{
 		// An image's first region starts its allocation, and 'GetModuleFileName' leaves out images mapped as data
 		WCHAR path[MAX_PATH];
-		if (info.Type != MEM_IMAGE || info.AllocationBase != info.BaseAddress || GetModuleFileNameW(static_cast<HMODULE>(info.AllocationBase), path, ARRAYSIZE(path)) == 0)
-			continue;
+		if (info.Type == MEM_IMAGE && info.AllocationBase == info.BaseAddress && GetModuleFileNameW(static_cast<HMODULE>(info.AllocationBase), path, ARRAYSIZE(path)) != 0)
+			images.push_back(static_cast<HMODULE>(info.AllocationBase));
+	}
+	return images;
+}
 
-		if (lphModule != nullptr && (count + 1) * sizeof(HMODULE) <= cb)
-			lphModule[count] = static_cast<HMODULE>(info.AllocationBase);
-		count++;
+static std::vector<HMODULE> mapped_images()
+{
+	bool walked = false;
+	{
+		const std::unique_lock<std::shared_mutex> lock(s_mapped_images_mutex);
+		walked = s_mapped_images_walked;
 	}
 
+	if (!walked)
+	{
+		// Registered before the walk, so a module that loads during it is queued, and one the walk also sees is kept once
+		// Both call into the loader, so they run without the lock, since a thread holding the loader lock may be waiting for it
+		if (!s_mapped_images_registered.exchange(true))
+		{
+			PVOID cookie = nullptr;
+			const auto LdrRegisterDllNotification = reinterpret_cast<LONG(NTAPI *)(ULONG Flags, FARPROC NotificationFunction, PVOID Context, PVOID *Cookie)>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "LdrRegisterDllNotification"));
+			if (LdrRegisterDllNotification != nullptr &&
+				LdrRegisterDllNotification(0, reinterpret_cast<FARPROC>(&MappedImageNotificationCallback), nullptr, &cookie) == 0 /* STATUS_SUCCESS */)
+			{
+				const std::unique_lock<std::shared_mutex> lock(s_mapped_images_mutex);
+				s_mapped_images_cookie = cookie;
+			}
+		}
+
+		std::vector<HMODULE> images = walk_mapped_images();
+
+		const std::unique_lock<std::shared_mutex> lock(s_mapped_images_mutex);
+		// Without notifications the list can't be kept current, so every call walks
+		if (s_mapped_images_cookie == nullptr)
+			return images;
+		if (!s_mapped_images_walked)
+		{
+			s_mapped_images = std::move(images);
+			s_mapped_images_walked = true;
+		}
+	}
+
+	const std::unique_lock<std::shared_mutex> lock(s_mapped_images_mutex);
+
+	std::vector<std::pair<HMODULE, bool>> changes;
+	{
+		const std::unique_lock<std::shared_mutex> changes_lock(s_mapped_image_changes_mutex);
+		changes.swap(s_mapped_image_changes);
+	}
+
+	for (const auto &[module, loaded] : changes)
+	{
+		const auto it = std::find(s_mapped_images.begin(), s_mapped_images.end(), module);
+		if (loaded && it == s_mapped_images.end())
+			s_mapped_images.push_back(module);
+		else if (!loaded && it != s_mapped_images.end())
+			s_mapped_images.erase(it);
+	}
+
+	return s_mapped_images;
+}
+
+// Add-ons find the ReShade module in 'DllMain' through 'EnumProcessModules', which fails in some processes (e.g. Phantom Blade Zero), so list the images mapped in the address space there instead
+static BOOL WINAPI HookK32EnumProcessModules(HANDLE hProcess, HMODULE *lphModule, DWORD cb, LPDWORD lpcbNeeded)
+{
+	static const auto trampoline = reshade::hooks::call(&HookK32EnumProcessModules);
+
+	const bool current_process = GetProcessId(hProcess) == GetCurrentProcessId();
+	if (!current_process || !s_module_list_unreadable)
+	{
+		if (trampoline(hProcess, lphModule, cb, lpcbNeeded))
+			return TRUE;
+		if (!current_process)
+			return FALSE;
+
+		// A process whose list can't be read once never can, and the failing call costs milliseconds each time
+		s_module_list_unreadable = true;
+	}
+
+	const std::vector<HMODULE> images = mapped_images();
+	if (lphModule != nullptr)
+		std::copy_n(images.begin(), std::min<size_t>(images.size(), cb / sizeof(HMODULE)), lphModule);
 	if (lpcbNeeded != nullptr)
-		*lpcbNeeded = count * sizeof(HMODULE);
+		*lpcbNeeded = static_cast<DWORD>(images.size() * sizeof(HMODULE));
 
 	SetLastError(ERROR_SUCCESS);
 	return TRUE;
+}
+
+void reshade::uninstall_module_list()
+{
+	if (s_mapped_images_cookie != nullptr)
+	{
+		const auto LdrUnregisterDllNotification = reinterpret_cast<LONG(NTAPI *)(PVOID Cookie)>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "LdrUnregisterDllNotification"));
+		if (LdrUnregisterDllNotification != nullptr)
+			LdrUnregisterDllNotification(s_mapped_images_cookie);
+	}
+
+	s_mapped_images_cookie = nullptr;
+	s_mapped_images_registered = false;
+	s_mapped_images_walked = false;
+	s_mapped_images.clear();
 }
 #endif
 
